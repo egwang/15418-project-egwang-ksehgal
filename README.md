@@ -76,3 +76,27 @@ Language: We are going to use C++ as it allows us to leverage the Open-MP and Op
 | April 26th | Analysis and comparison of both implementations |
 | April 29th | Final Report Due (Work on demo/poster session information |
 | May 5th | Poster Session |
+
+**Milestone Report:**
+
+- In one to two paragraphs, summarize the work that you have completed so far. (This should be easy if you have been maintaining this information on your project page.)
+
+So far, we&#39;ve completed researching and implementing a sequential version of the Artificial Bee Colony algorithm. We looked at different papers describing the algorithm and a few different implementations as well. These resources have helped us implement a general version of the algorithm. For example, to use our implementation you just need to define an arbitrary objective function with an arbitrary number of parameters to optimize. The ABC algorithm will find the parameters that minimize the function. We have also tested the algorithm with different hyper-parameters (such as number of trials and bee colony size) to try to find the optimal hyper-parameters.
+
+We have started working on implementing an open-MP version of the algorithm. We are currently identifying parallelizable work in our algorithm and will parallelize the code and analyze the speedup.
+
+- Describe how you are doing with respect to the goals and deliverables stated in your proposal. Do you still believe you will be able to produce all your deliverables? If not, why? What about the &quot;nice to haves&quot; ? In your milestone writeup we want an updated list of goals that you plan to hit for the poster session.
+
+We are slightly behind with respect to the goals and deliverables stated in our proposal, as we are still working on the Open-MP implementation. We think as long as we don&#39;t hit any massive issues with our Open-MP and Open-MPI implementations, we should be on track to produce our deliverables. However, we are unsure if we will be able to have our stretch goals (&quot;nice to haves&quot;) done in time for the final presentation, as it will definitely be a stretch to complete an entire other parallel implementation in time. Goals are still the same as from the proposal, nothing to update.
+
+- What do you plan to show at the poster session? Will it be a demo? Will it be a graph?
+
+We plan to have several graphs that analyze our work as there isn&#39;t much of a visual aspect to the project. We just run the code and it prints out numbers, so no demo aspect. Instead there will be graph based posters analyzing different statistics such as speedup, variance to fine tuned hyper parameters, etc.
+
+- Do you have preliminary results at this time? If so, it would be great to included them in your milestone write-up.
+
+Our preliminary results are that our sequential code currently works and is able to find the minima of testing functions including one called the sphere function.
+
+- List the issues that concern you the most. Are there any remaining unknowns (things you simply don&#39;t know how to solve, or resource you don&#39;t know how to get) or is it just a matter of coding and doing the work? If you do not wish to put this information on a public web site you are welcome to email the staff directly.
+
+One of the biggest concerns we had was determining the right values for the parameters to the optimization problems. Since we have many parameters that are required to find the best possible solution we have to fine tune those values such that they are optimal for the function we are trying to optimize. Although this is less a part of our implementation and more a part of our testing, it is still a valid concern to work on. Although our sequential code works and optimizes, since we are using different testing functions, each function will have separate parameters, like the number of iterations and trials.
