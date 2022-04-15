@@ -3,13 +3,13 @@
 #include<time.h>
 #include<stdlib.h>
 #include<string.h>
-
-#define MAX_NUM_PARAM 4
-#define COLONY_SIZE 10
+#include<limits.h>
+#define MAX_NUM_PARAM 2
+#define COLONY_SIZE 100
 #define NUM_FOOD_SOURCE COLONY_SIZE/2
 #define NUM_EMLOYED_BESS NUM_FOOD_SOURCE
-#define LOWER_BOUND -1
-#define UPPER_BOUND 1
+#define LOWER_BOUND -5
+#define UPPER_BOUND 5
 
 struct foodSource {
     double params[MAX_NUM_PARAM];
@@ -30,6 +30,13 @@ double getNectarVal(double functVal){
 }
 
 double objectiveFunct(double param[], int maxNum){
+    double functionVal;
+    //Sphere function sum(1 to maxNum) (x-0.5)^2
+    functionVal = pow((pow(param[0], 2) + param[1] - 11), 2) + pow((pow(param[1], 2) + param[0] - 7), 2);
+    return functionVal;
+}
+
+double objectiveFunctold(double param[], int maxNum){
     double functionVal;
     //Sphere function sum(1 to maxNum) (x-0.5)^2
     for (int start = 0; start < maxNum; start++){
@@ -65,19 +72,26 @@ void employedBeesPhase(foodSource origFood[]){
         foodSource currSrc = origFood[i];
         foodSource neighSrc = origFood[randNeigh];
         foodSource newSrc = origFood[i];
-        int newParam;
+        double newParam;
         while(true){
             double randInt = (double)(rand() % (200+1));
-            double phi = (-1.0 + randInt/200.0)/10000.0;
+            double phi = (-1.0 + randInt/200.0)/10;
             double step = phi*(currSrc.params[randParam] - neighSrc.params[randParam]);
+            
+            //printf("step: %f randParam: %d ", step, randParam);
+
             newParam = currSrc.params[randParam] + step;
             if (newParam >= LOWER_BOUND && newParam <= UPPER_BOUND){
                 break;
             }
         }
+
         newSrc.params[randParam] = newParam;
+        //printf("old food: %f, %f, %f, %f, new food: %f, %f, %f, %f\n", currSrc.params[0], currSrc.params[1], currSrc.params[2], currSrc.params[3], newSrc.params[0], newSrc.params[1], newSrc.params[2], newSrc.params[3]);
+
         newSrc.functionVal = objectiveFunct(newSrc.params, MAX_NUM_PARAM);
         newSrc.nectarVal = getNectarVal(newSrc.functionVal);
+        //printf("old nectar: %f, new nectar %f \n", currSrc.nectarVal, newSrc.nectarVal);
         if (newSrc.nectarVal > currSrc.nectarVal){
             newSrc.numTrials = 0;
             origFood[i] = newSrc;
@@ -97,10 +111,16 @@ double totalFitnessProb(foodSource origFood[]){
 
 void onlookerBeesPhase(foodSource origFood[]){
     double totalFitness = totalFitnessProb(origFood);
-    for (int i = 0; i < NUM_FOOD_SOURCE; i++){
+    int bee_index = 0;
+    int i = 0;
+    while(bee_index < NUM_FOOD_SOURCE){
+        if (i >= NUM_FOOD_SOURCE) {
+            i = 0;
+        }
         origFood[i].onlookerProb = origFood[i].nectarVal/totalFitness;
         double randInt = (double)(rand() % (100+1));
-        double randP = randInt/100.0;     
+        double randP = randInt/100.0; 
+        //printf("bee_index: %d, i: %d, onlocker prob: %f, randP %f \n", bee_index, i, origFood[i].onlookerProb, randP);    
         if (origFood[i].onlookerProb > randP){
             int randParam = (int)(rand()%(MAX_NUM_PARAM));
             int randNeigh = (int)(rand()%(NUM_FOOD_SOURCE));
@@ -128,7 +148,9 @@ void onlookerBeesPhase(foodSource origFood[]){
             } else{
                 origFood[i].numTrials += 1;
             }
+            bee_index += 1;
         }       
+        i += 1;
     }
 }
 
@@ -145,6 +167,10 @@ void scoutBeesPhase(foodSource origFood[], int max_num_trials){
         initializeOneFood(origFood, maxIdx);
     }
 }
+bool compareFunction(foodSource a, foodSource b){
+    return a.functionVal > b.functionVal;
+}
+
 int main(int argc, const char *argv[]) {
     //first arg = num iterations
     int MAX_ITERS = atoi(argv[1]);
@@ -152,15 +178,13 @@ int main(int argc, const char *argv[]) {
     printf("Max iters: %d\n", MAX_ITERS);
     printf("Max trials: %d\n", MAX_TRIALS);
     foodSource origFood[NUM_FOOD_SOURCE];
+    initializeFood(origFood);
     for (int i = 0; i < MAX_ITERS; i++){
-        initializeFood(origFood);
         employedBeesPhase(origFood);
         onlookerBeesPhase(origFood);
-        scoutBeesPhase(origFood, MAX_TRIALS);
         printf("\nIter: %d\n", i);
-        double min = 9999;
+        double min = INT_MAX;
         int minIdx = 0;
-
         for (int j = 0; j < NUM_FOOD_SOURCE; j++){
             if (origFood[j].functionVal < min){
                 min = origFood[j].functionVal;
@@ -171,6 +195,12 @@ int main(int argc, const char *argv[]) {
             printf("\tMinimum param #%d = %f\n", j, origFood[minIdx].params[j]);
         }
         printf("\tFunction Value = %f \n", origFood[minIdx].functionVal);
+        //sort(origFood, origFood + NUM_FOOD_SOURCE, compareFunction);
+        //printf("M1 = (%f, %f)", origFood[0].params[0], origFood[0].params[1]);
+        //printf("M2 = (%f, %f)", origFood[1].params[0], origFood[1].params[1]);
+       //printf("M3 = (%f, %f)", origFood[2].params[0], origFood[2].params[1]);
+        //printf("M4 = (%f, %f)", origFood[3].params[0], origFood[3].params[1]);
+        scoutBeesPhase(origFood, MAX_TRIALS);
     }
 
     return 0;
