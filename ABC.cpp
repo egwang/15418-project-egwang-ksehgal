@@ -4,12 +4,15 @@
 #include<stdlib.h>
 #include<string.h>
 #include<limits.h>
+#include <omp.h>
+#include <chrono>
+
 #define MAX_NUM_PARAM 2
-#define COLONY_SIZE 100
+#define COLONY_SIZE 100000
 #define NUM_FOOD_SOURCE COLONY_SIZE/2
 #define NUM_EMLOYED_BESS NUM_FOOD_SOURCE
-#define LOWER_BOUND -5
-#define UPPER_BOUND 5
+#define LOWER_BOUND -512
+#define UPPER_BOUND 512
 
 struct foodSource {
     double params[MAX_NUM_PARAM];
@@ -28,8 +31,15 @@ double getNectarVal(double functVal){
     }
     return nectarVal;
 }
+double objectiveFunct(double param[], int maxNum) {
+    double x1 = param[0];
+    double x2 = param[1];
 
-double objectiveFunct(double param[], int maxNum){
+    double result = -(x2 + 47) * sin(sqrt(abs(x2 + x1/2 + 47))) - x1 * sin(sqrt(abs(x1 - (x2 + 47))));
+    return result;
+}
+
+double objectiveFunctTest(double param[], int maxNum){
     double functionVal;
     //Sphere function sum(1 to maxNum) (x-0.5)^2
     functionVal = pow((pow(param[0], 2) + param[1] - 11), 2) + pow((pow(param[1], 2) + param[0] - 7), 2);
@@ -63,6 +73,8 @@ void initializeFood(foodSource origFood[]){
 }
 
 void employedBeesPhase(foodSource origFood[]){
+
+    #pragma omp parallel for
     for (int i = 0; i < NUM_FOOD_SOURCE; i++){
         int randParam = (int)(rand()%(MAX_NUM_PARAM));
         int randNeigh = (int)(rand()%(NUM_FOOD_SOURCE));
@@ -172,17 +184,32 @@ bool compareFunction(foodSource a, foodSource b){
 }
 
 int main(int argc, const char *argv[]) {
+    using namespace std::chrono;
+    typedef std::chrono::high_resolution_clock Clock;
+    typedef std::chrono::duration<double> dsec;
     //first arg = num iterations
     int MAX_ITERS = atoi(argv[1]);
     int MAX_TRIALS = atoi(argv[2]);
+    int NUM_THREADS = atoi(argv[3]);
     printf("Max iters: %d\n", MAX_ITERS);
     printf("Max trials: %d\n", MAX_TRIALS);
+    printf("Num Threads: %d\n", NUM_THREADS);
+
+    omp_set_num_threads(NUM_THREADS);
+
     foodSource origFood[NUM_FOOD_SOURCE];
     initializeFood(origFood);
+    double overall_min = INT_MAX;
+    double params[MAX_NUM_PARAM];
+
+    auto compute_start = Clock::now();
+    double compute_time = 0;
+
+
     for (int i = 0; i < MAX_ITERS; i++){
         employedBeesPhase(origFood);
         onlookerBeesPhase(origFood);
-        printf("\nIter: %d\n", i);
+        //printf("\nIter: %d\n", i);
         double min = INT_MAX;
         int minIdx = 0;
         for (int j = 0; j < NUM_FOOD_SOURCE; j++){
@@ -190,11 +217,19 @@ int main(int argc, const char *argv[]) {
                 min = origFood[j].functionVal;
                 minIdx = j;
             }
+            if (min < overall_min) {
+                overall_min = min;
+                for (int j = 0; j < MAX_NUM_PARAM; j++) {
+                    params[j] = origFood[minIdx].params[j];
+                }
+            }
         }
-        for (int j = 0; j < MAX_NUM_PARAM; j++){
-            printf("\tMinimum param #%d = %f\n", j, origFood[minIdx].params[j]);
-        }
-        printf("\tFunction Value = %f \n", origFood[minIdx].functionVal);
+
+
+       // for (int j = 0; j < MAX_NUM_PARAM; j++){
+       //     printf("\tMinimum param #%d = %f\n", j, origFood[minIdx].params[j]);
+       // }
+       // printf("\tFunction Value = %f \n", origFood[minIdx].functionVal);
         //sort(origFood, origFood + NUM_FOOD_SOURCE, compareFunction);
         //printf("M1 = (%f, %f)", origFood[0].params[0], origFood[0].params[1]);
         //printf("M2 = (%f, %f)", origFood[1].params[0], origFood[1].params[1]);
@@ -202,6 +237,12 @@ int main(int argc, const char *argv[]) {
         //printf("M4 = (%f, %f)", origFood[3].params[0], origFood[3].params[1]);
         scoutBeesPhase(origFood, MAX_TRIALS);
     }
+     compute_time += duration_cast<dsec>(Clock::now() - compute_start).count();
+     for (int j = 0; j < MAX_NUM_PARAM; j++){
+            printf("\tOverall min param #%d = %f\n", j, params[j]);
+        }
+        printf("\tFunction Value = %f \n", overall_min);
 
+    printf("Computation Time: %lf.\n", compute_time);
     return 0;
 }
