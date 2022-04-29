@@ -4,7 +4,6 @@
 #include<stdlib.h>
 #include<string.h>
 #include<limits.h>
-#include <omp.h>
 #include <chrono>
 
 #define MAX_NUM_PARAM 2
@@ -194,82 +193,15 @@ int main(int argc, const char *argv[]) {
     printf("Max trials: %d\n", MAX_TRIALS);
     printf("Num Threads: %d\n", NUM_THREADS);
 
-    omp_set_num_threads(NUM_THREADS);
-
     foodSource origFood[NUM_FOOD_SOURCE];
     initializeFood(origFood);
     double overall_min = INT_MAX;
     double params[MAX_NUM_PARAM];
 
-    foodSource thread_food[NUM_THREADS * NUM_FOOD_SOURCE];
-    double thread_mins[NUM_THREADS];
-    int thread_min_idx[NUM_THREADS];
-
     auto compute_start = Clock::now();
     double compute_time = 0;
-    int num_iters = 20;
 
-    for (int i = 0; i < MAX_ITERS/NUM_THREADS/num_iters; i++) {
 
-        #pragma omp parallel for 
-        for(int j = 0; j < NUM_THREADS; j++) {
-            auto copy_start = Clock::now();
-            double copy_time = 0;
-            for (int k = 0; k < NUM_FOOD_SOURCE; k++) {
-                thread_food[j*NUM_FOOD_SOURCE + k] = origFood[k];
-            }
-            copy_time += duration_cast<dsec>(Clock::now() - copy_start).count();
-            //printf("copy time: %lf.\n", copy_time);
-
-            auto comp_start = Clock::now();
-            double comp_time = 0;
-            
-            for (int k = 0; k < num_iters; k++){
-                employedBeesPhase(&thread_food[j]);
-                onlookerBeesPhase(&thread_food[j]);
-                
-                scoutBeesPhase(&thread_food[j], MAX_TRIALS);
-            }
-            double min = INT_MAX;
-            int minIdx = 0;
-            for (int k = 0; k < NUM_FOOD_SOURCE; k++){
-                if (thread_food[j * NUM_FOOD_SOURCE + k].functionVal < min){
-                    min = thread_food[j * NUM_FOOD_SOURCE + k].functionVal;
-                    minIdx = k;
-                }
-            }
-            thread_mins[j] = min;
-            thread_min_idx[j] = minIdx;
-            //printf("j: %d \n", j);
-            comp_time += duration_cast<dsec>(Clock::now() - comp_start).count();
-            //printf("comp_time: %lf.\n", comp_time);
-
-        }
-        //printf("iter: %d\n", i);
-
-        double min = INT_MAX;
-        int minIdx = 0;
-        int thread = 0;
-        for (int j = 0; j < NUM_THREADS; j++) {
-            if (thread_mins[j] < min) {
-                min = thread_mins[j];
-                minIdx = thread_min_idx[j];
-                thread = j;
-            }
-        }
-        if (min < overall_min) {
-            overall_min = min;
-            for (int j = 0; j < MAX_NUM_PARAM; j++) {
-                params[j] = thread_food[thread*NUM_FOOD_SOURCE + minIdx].params[j];
-            }
-        }
-        
-        for (int j = 0; j < NUM_FOOD_SOURCE; j++) {
-            origFood[j] = thread_food[thread*NUM_FOOD_SOURCE + j];
-        }
-    }
-
-/*
     for (int i = 0; i < MAX_ITERS; i++){
         employedBeesPhase(origFood);
         onlookerBeesPhase(origFood);
@@ -301,7 +233,6 @@ int main(int argc, const char *argv[]) {
         //printf("M4 = (%f, %f)", origFood[3].params[0], origFood[3].params[1]);
         scoutBeesPhase(origFood, MAX_TRIALS);
     }
-    */
      compute_time += duration_cast<dsec>(Clock::now() - compute_start).count();
      for (int j = 0; j < MAX_NUM_PARAM; j++){
             printf("\tOverall min param #%d = %f\n", j, params[j]);
