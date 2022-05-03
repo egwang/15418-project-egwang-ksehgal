@@ -113,10 +113,6 @@ void employedBeesPhase(foodSource origFood[], int thread, int iter){
             origFood[i].numTrials += 1;
         }
 
-        if (i == 2500 && iter == 0){
-            printf("Thread: %d, Employed time: %lf.\n", thread, duration_cast<dsec>(Clock::now() - employed_start).count());
-        }
-
     }
     
 }
@@ -180,10 +176,6 @@ void onlookerBeesPhase(foodSource origFood[], int iter){
         }       
         i += 1;
     }
-    if (iter == 0){
-        printf("Count = %d\n", count);
-    }
-
 }
 
 void scoutBeesPhase(foodSource origFood[], int max_num_trials){
@@ -226,9 +218,7 @@ int main(int argc, const char *argv[]) {
     auto compute_start = Clock::now();
     double compute_time = 0;
     
-    int num_iters = 1;
-
-    for (int i = 0; i < MAX_ITERS/NUM_THREADS/num_iters; i++) {
+    for (int i = 0; i < MAX_ITERS/NUM_THREADS; i++) {
         int j;
         #pragma omp parallel for 
         for(j = 0; j < NUM_THREADS; j++) {
@@ -239,23 +229,11 @@ int main(int argc, const char *argv[]) {
                 thread_food[adjust + k] = origFood[k];
             }
             copy_time += duration_cast<dsec>(Clock::now() - copy_start).count();
-            if (i == 0){
-                printf("Thread: %d, copy time: %lf.\n", j, copy_time);
-            }
-
             auto comp_start = Clock::now();
             double comp_time = 0;
             
             employedBeesPhase(&thread_food[j], j, i);
-            if (i == 0){
-                printf("Thread: %d, afterEmployed: %lf.\n", j, duration_cast<dsec>(Clock::now() - comp_start).count());
-            }
-            
-            onlookerBeesPhase(&thread_food[j], i);
-            if (i == 0){
-                printf("Thread: %d, afterPhases: %lf.\n", j, duration_cast<dsec>(Clock::now() - comp_start).count());
-            }
-    
+            onlookerBeesPhase(&thread_food[j], i);    
             double min = INT_MAX;
             int minIdx = 0;
             adjust = j * NUM_FOOD_SOURCE;
@@ -268,11 +246,7 @@ int main(int argc, const char *argv[]) {
             thread_mins[j] = min;
             thread_min_idx[j] = minIdx;
             //printf("j: %d \n", j);
-            comp_time += duration_cast<dsec>(Clock::now() - comp_start).count();
-            if (i == 0){
-                printf("Thread: %d, comp_time: %lf.\n", j, comp_time);
-            }
-        
+            comp_time += duration_cast<dsec>(Clock::now() - comp_start).count();        
         }
         //printf("iter: %d\n", i);
 
