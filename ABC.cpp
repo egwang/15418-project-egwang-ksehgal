@@ -232,8 +232,8 @@ int main(int argc, const char *argv[]) {
             auto comp_start = Clock::now();
             double comp_time = 0;
             
-            employedBeesPhase(&thread_food[j], j, i);
-            onlookerBeesPhase(&thread_food[j], i);    
+            employedBeesPhase(&thread_food[adjust], j, i);
+            onlookerBeesPhase(&thread_food[adjust], i);    
             double min = INT_MAX;
             int minIdx = 0;
             adjust = j * NUM_FOOD_SOURCE;
@@ -272,7 +272,6 @@ int main(int argc, const char *argv[]) {
             origFood[j] = thread_food[adjust + j];
         }
         scoutBeesPhase(origFood, MAX_TRIALS);
-
     }
 
 /*
