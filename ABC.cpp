@@ -8,11 +8,14 @@
 #include <chrono>
 
 #define MAX_NUM_PARAM 2
-#define COLONY_SIZE 100
+#define COLONY_SIZE 10000
 #define NUM_FOOD_SOURCE COLONY_SIZE/2
 #define NUM_EMLOYED_BESS NUM_FOOD_SOURCE
 #define LOWER_BOUND -512
 #define UPPER_BOUND 512
+using namespace std::chrono;
+typedef std::chrono::high_resolution_clock Clock;
+typedef std::chrono::duration<double> dsec;
 
 struct foodSource {
     double params[MAX_NUM_PARAM];
@@ -72,44 +75,50 @@ void initializeFood(foodSource origFood[]){
     }
 }
 
-void employedBeesPhase(foodSource origFood[]){
-
+void employedBeesPhase(foodSource origFood[], int thread, int iter){
+    auto employed_start = Clock::now();
+    unsigned seed = omp_get_thread_num();
     for (int i = 0; i < NUM_FOOD_SOURCE; i++){
-        int randParam = (int)(rand()%(MAX_NUM_PARAM));
-        int randNeigh = (int)(rand()%(NUM_FOOD_SOURCE));
+        
+        int randParam = (int)(rand_r(&seed)%(MAX_NUM_PARAM));
+        int randNeigh = (int)(rand_r(&seed)%(NUM_FOOD_SOURCE));
+        
         while (randNeigh == i){
-            randNeigh = (int)(rand()%(NUM_FOOD_SOURCE));
+            randNeigh = (int)(rand_r(&seed)%(NUM_FOOD_SOURCE));
         }
+        
         foodSource currSrc = origFood[i];
         foodSource neighSrc = origFood[randNeigh];
         foodSource newSrc = origFood[i];
         double newParam;
-        while(true){
-            double randInt = (double)(rand() % (200+1));
-            double phi = (-1.0 + randInt/200.0)/10;
-            double step = phi*(currSrc.params[randParam] - neighSrc.params[randParam]);
-            
-            //printf("step: %f randParam: %d ", step, randParam);
-
-            newParam = currSrc.params[randParam] + step;
-            if (newParam >= LOWER_BOUND && newParam <= UPPER_BOUND){
-                break;
-            }
+        double randInt = (double)(rand_r(&seed) % (200+1));
+        double phi = (-1.0 + randInt/200.0)/10;
+        double step = phi*(currSrc.params[randParam] - neighSrc.params[randParam]);
+        
+        newParam = currSrc.params[randParam] + step;
+        if (newParam < LOWER_BOUND){
+            newParam = LOWER_BOUND;
+        }
+        if (newParam > UPPER_BOUND){
+            newParam = UPPER_BOUND;
         }
 
         newSrc.params[randParam] = newParam;
-        //printf("old food: %f, %f, %f, %f, new food: %f, %f, %f, %f\n", currSrc.params[0], currSrc.params[1], currSrc.params[2], currSrc.params[3], newSrc.params[0], newSrc.params[1], newSrc.params[2], newSrc.params[3]);
-
         newSrc.functionVal = objectiveFunct(newSrc.params, MAX_NUM_PARAM);
         newSrc.nectarVal = getNectarVal(newSrc.functionVal);
-        //printf("old nectar: %f, new nectar %f \n", currSrc.nectarVal, newSrc.nectarVal);
         if (newSrc.nectarVal > currSrc.nectarVal){
             newSrc.numTrials = 0;
             origFood[i] = newSrc;
         } else{
             origFood[i].numTrials += 1;
         }
+
+        if (i == 2500 && iter == 0){
+            printf("Thread: %d, Employed time: %lf.\n", thread, duration_cast<dsec>(Clock::now() - employed_start).count());
+        }
+
     }
+    
 }
 
 double totalFitnessProb(foodSource origFood[]){
@@ -120,35 +129,43 @@ double totalFitnessProb(foodSource origFood[]){
     return totalFitness;
 }
 
-void onlookerBeesPhase(foodSource origFood[]){
+void onlookerBeesPhase(foodSource origFood[], int iter){
     double totalFitness = totalFitnessProb(origFood);
     int bee_index = 0;
     int i = 0;
+    int count = 0;
+    auto onlooker_start = Clock::now();
+    double compute_time = 0;
+    unsigned seed = omp_get_thread_num();
+            
     while(bee_index < NUM_FOOD_SOURCE){
+        count++;
+        
         if (i >= NUM_FOOD_SOURCE) {
             i = 0;
         }
         origFood[i].onlookerProb = origFood[i].nectarVal/totalFitness;
-        double randInt = (double)(rand() % (100+1));
+        double randInt = (double)(rand_r(&seed) % (100+1));
         double randP = randInt/100.0; 
         //printf("bee_index: %d, i: %d, onlocker prob: %f, randP %f \n", bee_index, i, origFood[i].onlookerProb, randP);    
         if (origFood[i].onlookerProb > randP){
-            int randParam = (int)(rand()%(MAX_NUM_PARAM));
-            int randNeigh = (int)(rand()%(NUM_FOOD_SOURCE));
+            int randParam = (int)(rand_r(&seed)%(MAX_NUM_PARAM));
+            int randNeigh = (int)(rand_r(&seed)%(NUM_FOOD_SOURCE));
             while (randNeigh == i){
-                randNeigh = (int)(rand()%(NUM_FOOD_SOURCE));
+                randNeigh = (int)(rand_r(&seed)%(NUM_FOOD_SOURCE));
             }
             foodSource currSrc = origFood[i];
             foodSource neighSrc = origFood[randNeigh];
             foodSource newSrc = origFood[i];
             int newParam;
-            while(true){
-                double randInt = (double)(rand() % (200+1));
-                double phi = -1.0 + randInt/200.0;
-                newParam = currSrc.params[randParam] + phi*(currSrc.params[randParam] - neighSrc.params[randParam]);
-                if (newParam >= LOWER_BOUND && newParam <= UPPER_BOUND){
-                    break;
-                }
+            double randInt = (double)(rand_r(&seed) % (200+1));
+            double phi = -1.0 + randInt/200.0;
+            newParam = currSrc.params[randParam] + phi*(currSrc.params[randParam] - neighSrc.params[randParam]);
+            if (newParam < LOWER_BOUND){
+                newParam = LOWER_BOUND;
+            }
+            if (newParam > UPPER_BOUND){
+                newParam = UPPER_BOUND;
             }
             newSrc.params[randParam] = newParam;
             newSrc.functionVal = objectiveFunct(newSrc.params, MAX_NUM_PARAM);
@@ -163,6 +180,10 @@ void onlookerBeesPhase(foodSource origFood[]){
         }       
         i += 1;
     }
+    if (iter == 0){
+        printf("Count = %d\n", count);
+    }
+
 }
 
 void scoutBeesPhase(foodSource origFood[], int max_num_trials){
@@ -183,9 +204,6 @@ bool compareFunction(foodSource a, foodSource b){
 }
 
 int main(int argc, const char *argv[]) {
-    using namespace std::chrono;
-    typedef std::chrono::high_resolution_clock Clock;
-    typedef std::chrono::duration<double> dsec;
     //first arg = num iterations
     int MAX_ITERS = atoi(argv[1]);
     int MAX_TRIALS = atoi(argv[2]);
@@ -207,34 +225,43 @@ int main(int argc, const char *argv[]) {
 
     auto compute_start = Clock::now();
     double compute_time = 0;
-    int num_iters = 20;
+    
+    int num_iters = 1;
 
     for (int i = 0; i < MAX_ITERS/NUM_THREADS/num_iters; i++) {
-
+        int j;
         #pragma omp parallel for 
-        for(int j = 0; j < NUM_THREADS; j++) {
+        for(j = 0; j < NUM_THREADS; j++) {
             auto copy_start = Clock::now();
             double copy_time = 0;
-            for (int k = 0; k < NUM_FOOD_SOURCE; k++) {
-                thread_food[j*NUM_FOOD_SOURCE + k] = origFood[k];
+            int adjust = j*NUM_FOOD_SOURCE;
+            for (int k = 0; k < NUM_FOOD_SOURCE; k++) {   
+                thread_food[adjust + k] = origFood[k];
             }
             copy_time += duration_cast<dsec>(Clock::now() - copy_start).count();
-            //printf("copy time: %lf.\n", copy_time);
+            if (i == 0){
+                printf("Thread: %d, copy time: %lf.\n", j, copy_time);
+            }
 
             auto comp_start = Clock::now();
             double comp_time = 0;
             
-            for (int k = 0; k < num_iters; k++){
-                employedBeesPhase(&thread_food[j]);
-                onlookerBeesPhase(&thread_food[j]);
-                
-                scoutBeesPhase(&thread_food[j], MAX_TRIALS);
+            employedBeesPhase(&thread_food[j], j, i);
+            if (i == 0){
+                printf("Thread: %d, afterEmployed: %lf.\n", j, duration_cast<dsec>(Clock::now() - comp_start).count());
             }
+            
+            onlookerBeesPhase(&thread_food[j], i);
+            if (i == 0){
+                printf("Thread: %d, afterPhases: %lf.\n", j, duration_cast<dsec>(Clock::now() - comp_start).count());
+            }
+    
             double min = INT_MAX;
             int minIdx = 0;
+            adjust = j * NUM_FOOD_SOURCE;
             for (int k = 0; k < NUM_FOOD_SOURCE; k++){
-                if (thread_food[j * NUM_FOOD_SOURCE + k].functionVal < min){
-                    min = thread_food[j * NUM_FOOD_SOURCE + k].functionVal;
+                if (thread_food[adjust + k].functionVal < min){
+                    min = thread_food[adjust + k].functionVal;
                     minIdx = k;
                 }
             }
@@ -242,8 +269,10 @@ int main(int argc, const char *argv[]) {
             thread_min_idx[j] = minIdx;
             //printf("j: %d \n", j);
             comp_time += duration_cast<dsec>(Clock::now() - comp_start).count();
-            //printf("comp_time: %lf.\n", comp_time);
-
+            if (i == 0){
+                printf("Thread: %d, comp_time: %lf.\n", j, comp_time);
+            }
+        
         }
         //printf("iter: %d\n", i);
 
@@ -259,14 +288,17 @@ int main(int argc, const char *argv[]) {
         }
         if (min < overall_min) {
             overall_min = min;
+            int adjust = thread*NUM_FOOD_SOURCE;
             for (int j = 0; j < MAX_NUM_PARAM; j++) {
-                params[j] = thread_food[thread*NUM_FOOD_SOURCE + minIdx].params[j];
+                params[j] = thread_food[adjust + minIdx].params[j];
             }
         }
-        
+        int adjust = thread*NUM_FOOD_SOURCE;
         for (int j = 0; j < NUM_FOOD_SOURCE; j++) {
-            origFood[j] = thread_food[thread*NUM_FOOD_SOURCE + j];
+            origFood[j] = thread_food[adjust + j];
         }
+        scoutBeesPhase(origFood, MAX_TRIALS);
+
     }
 
 /*
