@@ -8,7 +8,7 @@
 #include <chrono>
 
 #define MAX_NUM_PARAM 2
-#define COLONY_SIZE 10000
+#define COLONY_SIZE 100
 #define NUM_FOOD_SOURCE COLONY_SIZE/2
 #define NUM_EMLOYED_BESS NUM_FOOD_SOURCE
 #define LOWER_BOUND -512
@@ -24,6 +24,11 @@ struct foodSource {
     double numTrials;
     double onlookerProb;
 };
+
+struct foodMessage{
+    double min;
+    int min_idx;
+}
 
 double getNectarVal(double functVal){
     double nectarVal;
@@ -196,6 +201,8 @@ bool compareFunction(foodSource a, foodSource b){
 }
 
 int main(int argc, const char *argv[]) {
+    int root = 0;
+    int tag = 0;
     int procID;
     int NUM_THREADS;
 
@@ -218,6 +225,7 @@ int main(int argc, const char *argv[]) {
     foodSource thread_food[NUM_THREADS * NUM_FOOD_SOURCE];
     double thread_mins[NUM_THREADS];
     int thread_min_idx[NUM_THREADS];
+    foodMessage messages[NUM_THREADS];
 
     auto compute_start = Clock::now();
     double compute_time = 0;
@@ -227,7 +235,7 @@ int main(int argc, const char *argv[]) {
 
         auto copy_start = Clock::now();
         double copy_time = 0;
-        int adjust = j*NUM_FOOD_SOURCE;
+        int adjust = procID * NUM_FOOD_SOURCE;
         for (int k = 0; k < NUM_FOOD_SOURCE; k++) {   
             thread_food[adjust + k] = origFood[k];
         }
@@ -235,11 +243,11 @@ int main(int argc, const char *argv[]) {
         auto comp_start = Clock::now();
         double comp_time = 0;
         
-        employedBeesPhase(&thread_food[j*NUM_FOOD_SOURCE], j, i);
-        onlookerBeesPhase(&thread_food[j*NUM_FOOD_SOURCE], i);    
+        employedBeesPhase(&thread_food[adjust], procID, i);
+        onlookerBeesPhase(&thread_food[adjust], i);    
         double min = INT_MAX;
         int minIdx = 0;
-        adjust = j * NUM_FOOD_SOURCE;
+        //adjust = j * NUM_FOOD_SOURCE;
         for (int k = 0; k < NUM_FOOD_SOURCE; k++){
             if (thread_food[adjust + k].functionVal < min){
                 min = thread_food[adjust + k].functionVal;
@@ -248,28 +256,44 @@ int main(int argc, const char *argv[]) {
         }
         thread_mins[j] = min;
         thread_min_idx[j] = minIdx;
+
+        foodMessage message = {min, minIdx};
+
+        if (procID != 0) {
+            MPI_SEND(&message, 3, MPI_INT, root, tag, MPI_COMM_WORLD);
+        } else {
+            for (int source = 1; source < nproc; source++) {
+                MPI_Recv(&foodMessage[source], 3, MPI_INT, source, tag, MPI_COMM_WORLD &status);
+            }
+        }
+
+        if (procID == 0) {
+            double min = INT_MAX;
+            int minIdx = 0;
+            int thread = 0;
+            for (int j = 0; j < NUM_THREADS; j++) {
+                if (foodMessage[j].min < min) {
+                    min = foodMessage[j].min;
+                    minIdx = foodMessage[j].min_idx;
+                    thread = j;
+                }
+            }
+            if (min < overall_min) {
+                overall_min = min;
+                int adjust = thread*NUM_FOOD_SOURCE;
+                for (int j = 0; j < MAX_NUM_PARAM; j++) {
+                    params[j] = thread_food[adjust + minIdx].params[j];
+                }
+            }
+        }
+
+
         //printf("j: %d \n", j);
         comp_time += duration_cast<dsec>(Clock::now() - comp_start).count();        
         
         //printf("iter: %d\n", i);
 
-        double min = INT_MAX;
-        int minIdx = 0;
-        int thread = 0;
-        for (int j = 0; j < NUM_THREADS; j++) {
-            if (thread_mins[j] < min) {
-                min = thread_mins[j];
-                minIdx = thread_min_idx[j];
-                thread = j;
-            }
-        }
-        if (min < overall_min) {
-            overall_min = min;
-            int adjust = thread*NUM_FOOD_SOURCE;
-            for (int j = 0; j < MAX_NUM_PARAM; j++) {
-                params[j] = thread_food[adjust + minIdx].params[j];
-            }
-        }
+        
         int adjust = thread*NUM_FOOD_SOURCE;
         for (int j = 0; j < NUM_FOOD_SOURCE; j++) {
             origFood[j] = thread_food[adjust + j];
