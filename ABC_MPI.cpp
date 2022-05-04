@@ -8,7 +8,7 @@
 #include <chrono>
 #include <cstdlib>
 #define MAX_NUM_PARAM 2
-#define COLONY_SIZE 10000
+#define COLONY_SIZE 100
 #define NUM_FOOD_SOURCE COLONY_SIZE/2
 #define NUM_EMLOYED_BESS NUM_FOOD_SOURCE
 #define LOWER_BOUND -512
@@ -309,9 +309,10 @@ int main(int argc, char *argv[]) {
         for (int j = 0; j < MAX_NUM_PARAM; j++){
                 printf("\tOverall min param #%d = %f\n", j, params[j]);
             }
-            printf("\tFunction Value = %f \n", overall_min);
+        printf("\tFunction Value = %f \n", overall_min);
+        printf("\tError = %f \n", (959.64 + overall_min)/(959.64) * 100);
 
-        printf("Computation Time: %lf.\n", compute_time);
+        printf("Computation Time: %lf\n", compute_time);
     }
     MPI_Finalize();
     return 0;

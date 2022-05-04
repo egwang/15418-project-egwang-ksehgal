@@ -7,7 +7,7 @@
 #include <chrono>
 
 #define MAX_NUM_PARAM 2
-#define COLONY_SIZE 100
+#define COLONY_SIZE 1000
 #define NUM_FOOD_SOURCE COLONY_SIZE/2
 #define NUM_EMLOYED_BESS NUM_FOOD_SOURCE
 #define LOWER_BOUND -512
