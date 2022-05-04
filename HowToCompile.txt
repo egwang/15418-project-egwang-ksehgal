@@ -1,0 +1,11 @@
+15-418: How To Compile:
+
+OpenMp: 
+g++ -m64 -std=c++11 -I. -O3 -Wall -fopenmp -g -o abc ABC.cpp
+Then followed by ./abc 1000 10 1 (where last parameter is numThreads)
+
+OpenMPI:
+just type make (I put in a make file)
+then followed by mpirun -np 1 ./abc_mpi 1000 10
+where after -np flag is number of threads
+
