@@ -4,8 +4,8 @@
 #include<stdlib.h>
 #include<string.h>
 #include<limits.h>
+#include<chrono>
 #include <omp.h>
-#include <chrono>
 
 #define MAX_NUM_PARAM 2
 #define COLONY_SIZE 10000

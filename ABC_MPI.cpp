@@ -6,9 +6,9 @@
 #include<limits.h>
 #include "mpi.h"
 #include <chrono>
-
+#include <cstdlib>
 #define MAX_NUM_PARAM 2
-#define COLONY_SIZE 100
+#define COLONY_SIZE 10000
 #define NUM_FOOD_SOURCE COLONY_SIZE/2
 #define NUM_EMLOYED_BESS NUM_FOOD_SOURCE
 #define LOWER_BOUND -512
@@ -25,10 +25,6 @@ struct foodSource {
     double onlookerProb;
 };
 
-struct foodMessage{
-    double min;
-    int min_idx;
-}
 
 double getNectarVal(double functVal){
     double nectarVal;
@@ -80,9 +76,11 @@ void initializeFood(foodSource origFood[]){
     }
 }
 
-void employedBeesPhase(foodSource origFood[], int thread, int iter){
+void employedBeesPhase(foodSource origFood[]){
     auto employed_start = Clock::now();
-    unsigned seed = omp_get_thread_num();
+    int procID;
+    MPI_Comm_rank(MPI_COMM_WORLD, &procID);
+    unsigned seed = procID;
     for (int i = 0; i < NUM_FOOD_SOURCE; i++){
         
         int randParam = (int)(rand_r(&seed)%(MAX_NUM_PARAM));
@@ -130,15 +128,16 @@ double totalFitnessProb(foodSource origFood[]){
     return totalFitness;
 }
 
-void onlookerBeesPhase(foodSource origFood[], int iter){
+void onlookerBeesPhase(foodSource origFood[]){
     double totalFitness = totalFitnessProb(origFood);
     int bee_index = 0;
     int i = 0;
     int count = 0;
     auto onlooker_start = Clock::now();
     double compute_time = 0;
-    unsigned seed = omp_get_thread_num();
-            
+    int procID;
+    MPI_Comm_rank(MPI_COMM_WORLD, &procID);
+    unsigned seed = procID;
     while(bee_index < NUM_FOOD_SOURCE){
         count++;
         
@@ -200,53 +199,54 @@ bool compareFunction(foodSource a, foodSource b){
     return a.functionVal > b.functionVal;
 }
 
-int main(int argc, const char *argv[]) {
+int main(int argc, char *argv[]) {
     int root = 0;
     int tag = 0;
     int procID;
+    int MAX_ITERS = atoi(argv[1]);
+    int MAX_TRIALS = atoi(argv[2]);
     int NUM_THREADS;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &procID);
     MPI_Comm_size(MPI_COMM_WORLD, &NUM_THREADS);
     //first arg = num iterations
-    int MAX_ITERS = atoi(argv[1]);
-    int MAX_TRIALS = atoi(argv[2]);
-    int NUM_THREADS = atoi(argv[3]);
-    printf("Max iters: %d\n", MAX_ITERS);
-    printf("Max trials: %d\n", MAX_TRIALS);
-    printf("Num Threads: %d\n", NUM_THREADS);
-
+    if (procID == 0){
+        printf("Max iters: %d\n", MAX_ITERS);
+        printf("Max trials: %d\n", MAX_TRIALS);
+        printf("Num Threads: %d\n", NUM_THREADS);
+        //printf("size is :%d\n", size);
+    }
     foodSource origFood[NUM_FOOD_SOURCE];
     initializeFood(origFood);
-    double overall_min = INT_MAX;
+    double overall_min;
+    overall_min = INT_MAX;
     double params[MAX_NUM_PARAM];
 
     foodSource thread_food[NUM_THREADS * NUM_FOOD_SOURCE];
     double thread_mins[NUM_THREADS];
     int thread_min_idx[NUM_THREADS];
-    foodMessage messages[NUM_THREADS];
 
     auto compute_start = Clock::now();
     double compute_time = 0;
-    
+    MPI_Status status;
     for (int i = 0; i < MAX_ITERS/NUM_THREADS; i++) {
-
-
         auto copy_start = Clock::now();
         double copy_time = 0;
         int adjust = procID * NUM_FOOD_SOURCE;
         for (int k = 0; k < NUM_FOOD_SOURCE; k++) {   
             thread_food[adjust + k] = origFood[k];
+            //printf("i: %d, thread: %d, origFood[k]val: %f\n", i, procID, origFood[k].functionVal);
         }
+        //printf("inloop :%d\n", i);
         copy_time += duration_cast<dsec>(Clock::now() - copy_start).count();
         auto comp_start = Clock::now();
         double comp_time = 0;
-        
-        employedBeesPhase(&thread_food[adjust], procID, i);
-        onlookerBeesPhase(&thread_food[adjust], i);    
+        //printf("before phase :%d\n", i);
+        employedBeesPhase(&thread_food[adjust]);
+        onlookerBeesPhase(&thread_food[adjust]);    
         double min = INT_MAX;
-        int minIdx = 0;
+        double minIdx = 0;
         //adjust = j * NUM_FOOD_SOURCE;
         for (int k = 0; k < NUM_FOOD_SOURCE; k++){
             if (thread_food[adjust + k].functionVal < min){
@@ -254,93 +254,65 @@ int main(int argc, const char *argv[]) {
                 minIdx = k;
             }
         }
-        thread_mins[j] = min;
-        thread_min_idx[j] = minIdx;
-
-        foodMessage message = {min, minIdx};
+        thread_mins[procID] = min;
+        thread_min_idx[procID] = minIdx;
 
         if (procID != 0) {
-            MPI_SEND(&message, 3, MPI_INT, root, tag, MPI_COMM_WORLD);
+            MPI_Send(&thread_mins[procID], 1, MPI_DOUBLE, root, 0, MPI_COMM_WORLD);
         } else {
-            for (int source = 1; source < nproc; source++) {
-                MPI_Recv(&foodMessage[source], 3, MPI_INT, source, tag, MPI_COMM_WORLD &status);
+            for (int source = 1; source < NUM_THREADS; source++) {
+                MPI_Recv(&thread_mins[source], 1,MPI_DOUBLE, source, 0, MPI_COMM_WORLD, &status);
+            }
+        }
+        if (procID != 0) {
+            MPI_Send(&thread_min_idx[procID], 1, MPI_INT, root, 0, MPI_COMM_WORLD);
+        } else {
+            for (int source = 1; source < NUM_THREADS; source++) {
+                MPI_Recv(&thread_min_idx[source], 1, MPI_INT, source, 0, MPI_COMM_WORLD, &status);
             }
         }
 
+        int thread = -1;
         if (procID == 0) {
-            double min = INT_MAX;
-            int minIdx = 0;
-            int thread = 0;
             for (int j = 0; j < NUM_THREADS; j++) {
-                if (foodMessage[j].min < min) {
-                    min = foodMessage[j].min;
-                    minIdx = foodMessage[j].min_idx;
+                if (thread_mins[j] <= min) {
+                    min = thread_mins[j];
+                    minIdx = thread_min_idx[j];
                     thread = j;
                 }
             }
-            if (min < overall_min) {
-                overall_min = min;
-                int adjust = thread*NUM_FOOD_SOURCE;
-                for (int j = 0; j < MAX_NUM_PARAM; j++) {
-                    params[j] = thread_food[adjust + minIdx].params[j];
-                }
-            }
         }
-
-
-        //printf("j: %d \n", j);
-        comp_time += duration_cast<dsec>(Clock::now() - comp_start).count();        
-        
-        //printf("iter: %d\n", i);
-
-        
-        int adjust = thread*NUM_FOOD_SOURCE;
-        for (int j = 0; j < NUM_FOOD_SOURCE; j++) {
-            origFood[j] = thread_food[adjust + j];
-        }
-        scoutBeesPhase(origFood, MAX_TRIALS);
-
-    }
-
-/*
-    for (int i = 0; i < MAX_ITERS; i++){
-        employedBeesPhase(origFood);
-        onlookerBeesPhase(origFood);
-        //printf("\nIter: %d\n", i);
-        double min = INT_MAX;
-        int minIdx = 0;
-        for (int j = 0; j < NUM_FOOD_SOURCE; j++){
-            if (origFood[j].functionVal < min){
-                min = origFood[j].functionVal;
-                minIdx = j;
+        MPI_Bcast(&thread, 1, MPI_INT, root, MPI_COMM_WORLD);
+        comp_time += duration_cast<dsec>(Clock::now() - comp_start).count(); 
+        if (procID == thread) {
+            adjust = thread*NUM_FOOD_SOURCE;
+            for (int j = 0; j < NUM_FOOD_SOURCE; j++) {
+                origFood[j] = thread_food[adjust + j];
             }
             if (min < overall_min) {
                 overall_min = min;
                 for (int j = 0; j < MAX_NUM_PARAM; j++) {
-                    params[j] = origFood[minIdx].params[j];
+                    params[j] = origFood[(int)minIdx].params[j];
                 }
             }
+            scoutBeesPhase(origFood, MAX_TRIALS);
         }
-
-
-       // for (int j = 0; j < MAX_NUM_PARAM; j++){
-       //     printf("\tMinimum param #%d = %f\n", j, origFood[minIdx].params[j]);
-       // }
-       // printf("\tFunction Value = %f \n", origFood[minIdx].functionVal);
-        //sort(origFood, origFood + NUM_FOOD_SOURCE, compareFunction);
-        //printf("M1 = (%f, %f)", origFood[0].params[0], origFood[0].params[1]);
-        //printf("M2 = (%f, %f)", origFood[1].params[0], origFood[1].params[1]);
-       //printf("M3 = (%f, %f)", origFood[2].params[0], origFood[2].params[1]);
-        //printf("M4 = (%f, %f)", origFood[3].params[0], origFood[3].params[1]);
-        scoutBeesPhase(origFood, MAX_TRIALS);
+        MPI_Bcast(&overall_min, 2, MPI_INT, thread, MPI_COMM_WORLD);
+        MPI_Bcast(&params, MAX_NUM_PARAM*2, MPI_INT, thread, MPI_COMM_WORLD);
+        int size = NUM_FOOD_SOURCE*(4+MAX_NUM_PARAM)*2;
+        MPI_Bcast(&origFood, size, MPI_INT, thread, MPI_COMM_WORLD);
     }
-    */
-     compute_time += duration_cast<dsec>(Clock::now() - compute_start).count();
-     for (int j = 0; j < MAX_NUM_PARAM; j++){
-            printf("\tOverall min param #%d = %f\n", j, params[j]);
-        }
-        printf("\tFunction Value = %f \n", overall_min);
 
-    printf("Computation Time: %lf.\n", compute_time);
+
+    if (procID == 0) {
+        compute_time += duration_cast<dsec>(Clock::now() - compute_start).count();
+        for (int j = 0; j < MAX_NUM_PARAM; j++){
+                printf("\tOverall min param #%d = %f\n", j, params[j]);
+            }
+            printf("\tFunction Value = %f \n", overall_min);
+
+        printf("Computation Time: %lf.\n", compute_time);
+    }
+    MPI_Finalize();
     return 0;
 }
