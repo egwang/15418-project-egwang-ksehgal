@@ -1,8 +1,8 @@
 15-418: How To Compile:
 
 OpenMp: 
-g++ -m64 -std=c++11 -I. -O3 -Wall -fopenmp -g -o abc ABC.cpp
-Then followed by ./abc 1000 10 1 (where last parameter is numThreads)
+g++ -m64 -std=c++11 -I. -O3 -Wall -fopenmp -g -o abc_mp ABC_MP.cpp
+Then followed by ./abc_mp 1000 10 1 (where last parameter is numThreads)
 
 OpenMPI:
 just type make (I put in a make file)
