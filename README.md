@@ -1,6 +1,6 @@
-**15-418: Project Proposal**
-
 **FINAL VIDEO LINK** : https://www.youtube.com/watch?v=F950jRV44ak
+
+**15-418: Project Proposal**
 
 **TITLE** : Parallelizing the Artificial Bee Colony (ABC) Algorithm
 
